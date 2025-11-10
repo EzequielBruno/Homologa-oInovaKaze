@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Grupo Zema Brand Colors - Extended Palette */
+    --zema-dark: 200 58% 11%;        /* #091F2C */
+    --zema-medium: 200 60% 15%;      /* #0C2E3F */
+    --zema-light: 210 73% 25%;       /* #11406D */
+    --zema-yellow: 48 100% 50%;      /* #FFCD00 */
+    --zema-green: 66 69% 52%;        /* #CCDB26 */
+    --zema-blue: 208 73% 39%;        /* #1961AE */
+    --zema-light-blue: 200 90% 45%;  /* Light Blue for status */
+    --zema-orange: 25 95% 53%;       /* Orange for warnings */
+    --zema-purple: 271 81% 56%;      /* Purple for special status */
+    --zema-dark-blue: 220 100% 20%;  /* Dark Blue variant */
+
+    /* Theme Colors - Corporate Dark Theme */
+    --background: 200 58% 11%;       /* Deep corporate blue */
+    --foreground: 0 0% 100%;         /* White text */
+
+    --card: 200 60% 15%;             /* Card background */
+    --card-foreground: 0 0% 98%;     /* Card text */
+
+    --popover: 200 60% 15%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 48 100% 50%;          /* Zema Yellow */
+    --primary-foreground: 200 58% 11%;
+
+    --secondary: 210 73% 25%;        /* Zema Light Blue */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 200 50% 20%;
+    --muted-foreground: 0 0% 75%;
+
+    --accent: 66 69% 52%;            /* Zema Green */
+    --accent-foreground: 200 58% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 200 40% 25%;
+    --input: 200 50% 18%;
+    --ring: 48 100% 50%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar Colors */
+    --sidebar-background: 200 58% 11%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 48 100% 50%;
+    --sidebar-primary-foreground: 200 58% 11%;
+    --sidebar-accent: 200 60% 15%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 200 40% 25%;
+    --sidebar-ring: 48 100% 50%;
+    
+    /* PMO Status Colors */
+    --status-evaluation: var(--zema-orange);
+    --status-committee: var(--zema-purple);
+    --status-approved: var(--zema-green);
+    --status-in-progress: var(--zema-light-blue);
+    --status-completed: var(--zema-green);
+    
+    /* Chart Colors for Recharts */
+    --chart-1: var(--zema-yellow);
+    --chart-2: var(--zema-blue);
+    --chart-3: var(--zema-light-blue);
+    --chart-4: var(--zema-green);
+    --chart-5: var(--zema-orange);
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--zema-yellow)), hsl(var(--zema-blue)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--zema-yellow)), hsl(var(--zema-green)));
+    --gradient-card: linear-gradient(145deg, hsl(var(--card)), hsl(200 50% 18%));
+    --gradient-success: linear-gradient(135deg, hsl(var(--zema-green)), hsl(66 69% 60%));
+    --gradient-warning: linear-gradient(135deg, hsl(var(--zema-orange)), hsl(25 95% 60%));
+
+    /* Shadows */
+    --shadow-lg: 0 10px 40px -10px hsl(var(--zema-dark) / 0.5);
+    --shadow-yellow: 0 4px 20px hsl(var(--zema-yellow) / 0.2);
+    --shadow-zema: 0 10px 30px -10px hsl(var(--zema-yellow) / 0.3);
+    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.2);
+    
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer components {
+  /* Gradient backgrounds */
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .bg-gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .bg-gradient-card {
+    background: var(--gradient-card);
+  }
+  
+  .bg-gradient-success {
+    background: var(--gradient-success);
+  }
+  
+  .bg-gradient-warning {
+    background: var(--gradient-warning);
+  }
+
+  /* Custom shadows */
+  .shadow-zema {
+    box-shadow: var(--shadow-zema);
+  }
+
+  .shadow-yellow {
+    box-shadow: var(--shadow-yellow);
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+  
+  /* PMO Status Badges */
+  .status-badge-evaluation {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+    background-color: hsl(var(--status-evaluation) / 0.2);
+    color: hsl(var(--status-evaluation));
+    border: 1px solid hsl(var(--status-evaluation) / 0.3);
+  }
+
+  .status-badge-committee {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+    background-color: hsl(var(--status-committee) / 0.2);
+    color: hsl(var(--status-committee));
+    border: 1px solid hsl(var(--status-committee) / 0.3);
+  }
+
+  .status-badge-approved {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+    background-color: hsl(var(--status-approved) / 0.2);
+    color: hsl(var(--status-approved));
+    border: 1px solid hsl(var(--status-approved) / 0.3);
+  }
+
+  .status-badge-in-progress {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+    background-color: hsl(var(--status-in-progress) / 0.2);
+    color: hsl(var(--status-in-progress));
+    border: 1px solid hsl(var(--status-in-progress) / 0.3);
+  }
+
+  .status-badge-completed {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+    background-color: hsl(var(--status-completed) / 0.2);
+    color: hsl(var(--status-completed));
+    border: 1px solid hsl(var(--status-completed) / 0.3);
+  }
+}
+
+/* Print Styles */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm;
+  }
+
+  /* Oculta tudo primeiro */
+  body * {
+    display: none !important;
+  }
+
+  /* Mostra apenas o conteúdo de impressão e seus descendentes */
+  #print-content,
+  #print-content * {
+    display: block !important;
+  }
+
+  /* Força cores para impressão */
+  #print-content {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Evita quebras de página */
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Remove margens e padding do body */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
