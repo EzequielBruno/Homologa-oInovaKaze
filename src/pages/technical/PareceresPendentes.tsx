@@ -81,7 +81,8 @@ const PareceresPendentes = () => {
           return;
         }
 
-        newStatus = 'Aprovado';
+        // Move para Aguardando GP após avaliação TI
+        newStatus = 'Aguardando_Gerente';
         const totalHoras = phases.reduce((sum, p) => sum + (p.horas || 0), 0);
         updateData = {
           status: newStatus,

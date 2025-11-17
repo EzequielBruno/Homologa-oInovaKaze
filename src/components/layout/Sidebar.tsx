@@ -145,14 +145,20 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               >
                 Backlog
               </NavLink>
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/sprint-atual`} 
+              <NavLink
+                to={`/empresa/${empresa.codigo.toLowerCase()}/sprint-atual`}
                 className="block py-2 text-sm hover:text-primary transition-colors"
               >
                 Sprint Atual
               </NavLink>
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/concluidas`} 
+              <NavLink
+                to={`/empresa/${empresa.codigo.toLowerCase()}/gerenciar-sprint`}
+                className="block py-2 text-sm hover:text-primary transition-colors"
+              >
+                Gerenciar Sprint
+              </NavLink>
+              <NavLink
+                to={`/empresa/${empresa.codigo.toLowerCase()}/concluidas`}
                 className="block py-2 text-sm hover:text-primary transition-colors"
               >
                 Concluídas

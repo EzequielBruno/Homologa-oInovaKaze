@@ -125,33 +125,66 @@ const nextPendingApprover = (
 export const listFunctionalRequirements = async (
   userId?: string,
 ): Promise<FunctionalRequirementRecord[]> => {
-  const { data, error } = await supabase
+  // Buscar requisitos
+  const { data: requirements, error } = await supabase
     .from('functional_requirements')
-    .select(`
-      *,
-      signatures:functional_requirement_signatures(
-        *,
-        signer:signer_id(full_name)
-      ),
-      creator:created_by(full_name),
-      currentApprover:current_approver_id(full_name)
-    `)
+    .select('*')
     .order('created_at', { ascending: false });
 
-  if (error) {
-    throw error;
+  if (error || !requirements) {
+    throw error || new Error('Não foi possível carregar requisitos');
   }
 
-  const records = (data || []) as any[];
+  if (requirements.length === 0) {
+    return [];
+  }
+
+  // Buscar assinaturas
+  const { data: signatures } = await supabase
+    .from('functional_requirement_signatures')
+    .select('*')
+    .in('requirement_id', requirements.map(r => r.id));
+
+  // Buscar perfis de todos os usuários envolvidos
+  const userIds = new Set<string>();
+  requirements.forEach(req => {
+    if (req.created_by) userIds.add(req.created_by);
+    if (req.current_approver_id) userIds.add(req.current_approver_id);
+  });
+  signatures?.forEach(sig => {
+    if (sig.signer_id) userIds.add(sig.signer_id);
+  });
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', Array.from(userIds));
+
+  const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+  // Montar a estrutura final
+  const allRecords: FunctionalRequirementRecord[] = requirements.map(req => {
+    const reqSignatures = signatures?.filter(s => s.requirement_id === req.id) || [];
+    
+    return {
+      ...req,
+      signatures: reqSignatures.map(sig => ({
+        ...sig,
+        signer: profileMap.get(sig.signer_id) || null,
+      })),
+      creator: profileMap.get(req.created_by) || null,
+      currentApprover: req.current_approver_id ? profileMap.get(req.current_approver_id) || null : null,
+    };
+  });
 
   if (!userId) {
-    return records as FunctionalRequirementRecord[];
+    return allRecords;
   }
 
-  return records.filter(
+  return allRecords.filter(
     (requirement) =>
       requirement.created_by === userId || (requirement.approver_ids || []).includes(userId),
-  ) as FunctionalRequirementRecord[];
+  );
 };
 
 export interface ActiveProfile {

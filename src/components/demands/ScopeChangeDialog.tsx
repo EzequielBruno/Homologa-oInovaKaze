@@ -22,6 +22,7 @@ interface ScopeChangeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  initialDemandId?: string;
 }
 
 interface DemandOption {
@@ -33,7 +34,7 @@ interface DemandOption {
   created_at: string;
 }
 
-const ScopeChangeDialog = ({ open, onOpenChange, onSuccess }: ScopeChangeDialogProps) => {
+const ScopeChangeDialog = ({ open, onOpenChange, onSuccess, initialDemandId }: ScopeChangeDialogProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [demands, setDemands] = useState<DemandOption[]>([]);
@@ -77,7 +78,13 @@ const ScopeChangeDialog = ({ open, onOpenChange, onSuccess }: ScopeChangeDialogP
     };
 
     loadDemands();
-  }, [open]);
+  }, [open, toast]);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedDemandId(initialDemandId ?? '');
+    }
+  }, [open, initialDemandId]);
 
   // Filtrar demandas em tempo real
   const filteredDemands = useMemo(() => {
@@ -98,25 +105,29 @@ const ScopeChangeDialog = ({ open, onOpenChange, onSuccess }: ScopeChangeDialogP
         const now = new Date();
         
         switch (filterPeriodo) {
-          case '7days':
+          case '7days': {
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(now.getDate() - 7);
             matchesPeriodo = createdAt >= sevenDaysAgo;
             break;
-          case '30days':
+          }
+          case '30days': {
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(now.getDate() - 30);
             matchesPeriodo = createdAt >= thirtyDaysAgo;
             break;
-          case '90days':
+          }
+          case '90days': {
             const ninetyDaysAgo = new Date();
             ninetyDaysAgo.setDate(now.getDate() - 90);
             matchesPeriodo = createdAt >= ninetyDaysAgo;
             break;
-          case 'thisYear':
+          }
+          case 'thisYear': {
             matchesPeriodo = createdAt.getFullYear() === now.getFullYear();
             break;
-          case 'custom':
+          }
+          case 'custom': {
             // Filtro customizado por intervalo de datas
             if (customDateFrom && customDateTo) {
               const from = new Date(customDateFrom);
@@ -134,6 +145,7 @@ const ScopeChangeDialog = ({ open, onOpenChange, onSuccess }: ScopeChangeDialogP
               matchesPeriodo = createdAt <= to;
             }
             break;
+          }
         }
       }
 

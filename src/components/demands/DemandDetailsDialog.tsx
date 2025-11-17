@@ -36,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useDemandHistory } from '@/hooks/useDemandHistory';
+import { Input } from '@/components/ui/input';
 
 interface DemandDetailsDialogProps {
   demandId: string | null;
@@ -106,6 +107,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
   const [assignSaving, setAssignSaving] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [sprintNumber, setSprintNumber] = useState('');
   const [updateMessage, setUpdateMessage] = useState('');
   const [requestingAssignmentId, setRequestingAssignmentId] = useState<string | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -131,6 +133,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
       loadAvailableUsers();
     } else {
       setSelectedAssignee('');
+      setSprintNumber('');
     }
   }, [assignDialogOpen]);
 
@@ -205,9 +208,63 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
       // Carregar atribuições
       const { data: assignmentsData } = await supabase
         .from('demand_assignments')
-        .select('*, assigned_to_profile:assigned_to(full_name, avatar_url), assigned_by_profile:assigned_by(full_name, avatar_url)')
+        .select(
+          `
+            *,
+            assigned_to_profile:assigned_to (id, full_name, avatar_url),
+            assigned_by_profile:assigned_by (id, full_name, avatar_url)
+          `
+        )
         .eq('demand_id', demandId)
         .order('created_at', { ascending: false });
+
+      let assignmentsWithProfiles = assignmentsData || [];
+
+      const assignmentUserIds = Array.from(
+        new Set(
+          (assignmentsWithProfiles || [])
+            .flatMap((assignment) => [assignment.assigned_to, assignment.assigned_by])
+            .filter((userId): userId is string => Boolean(userId))
+        )
+      );
+
+      if (assignmentUserIds.length > 0) {
+        const { data: assignmentProfilesData, error: assignmentProfilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', assignmentUserIds);
+
+        if (assignmentProfilesError) {
+          throw assignmentProfilesError;
+        }
+
+        const profileMap = new Map<string, { id: string; full_name: string | null; avatar_url: string | null }>();
+        assignmentProfilesData?.forEach((profile) => {
+          profileMap.set(profile.id, profile);
+        });
+
+        assignmentsWithProfiles = assignmentsWithProfiles.map((assignment) => {
+          const assignedToProfile = assignment.assigned_to
+            ? {
+                ...(assignment.assigned_to_profile || {}),
+                ...(profileMap.get(assignment.assigned_to) || {}),
+              }
+            : assignment.assigned_to_profile;
+
+          const assignedByProfile = assignment.assigned_by
+            ? {
+                ...(assignment.assigned_by_profile || {}),
+                ...(profileMap.get(assignment.assigned_by) || {}),
+              }
+            : assignment.assigned_by_profile;
+
+          return {
+            ...assignment,
+            assigned_to_profile: assignedToProfile,
+            assigned_by_profile: assignedByProfile,
+          };
+        });
+      }
 
       // Carregar comentários
       const { data: commentsData } = await supabase
@@ -381,7 +438,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
       }
       setHistory(historyWithProfiles || []);
       setApprovals(combinedApprovals);
-      setAssignments(assignmentsData || []);
+      setAssignments(assignmentsWithProfiles || []);
       setComments(commentsData || []);
       // Verifica se já existe avaliação técnica da TI
       if (demandData) {
@@ -431,6 +488,18 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
       return;
     }
 
+    if (!sprintNumber || sprintNumber.trim() === '') {
+      toast.error('Informe o número da sprint.');
+      return;
+    }
+
+    const parsedSprintNumber = Number(sprintNumber);
+
+    if (!Number.isFinite(parsedSprintNumber) || parsedSprintNumber <= 0 || isNaN(parsedSprintNumber)) {
+      toast.error('Informe um número de sprint válido (número positivo).');
+      return;
+    }
+
     setAssignSaving(true);
 
     try {
@@ -448,12 +517,18 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
 
       const hasFaseamento = Boolean(phasesData && phasesData.length > 0);
 
-      const { error: assignError } = await supabase.from('demand_assignments').insert([{
+      const prazoFaseamento = !hasFaseamento
+        ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        : null;
+
+      const { error: assignError } = await supabase.from('demand_assignments').insert([{ 
         demand_id: demandId,
         assigned_to: selectedAssignee,
         assigned_by: userData.user.id,
         faseamento_completo: hasFaseamento,
         notificacao_pendente: !hasFaseamento,
+        sprint_number: parsedSprintNumber,
+        prazo_faseamento: prazoFaseamento,
       }] as any);
 
       if (assignError) throw assignError;
@@ -462,7 +537,9 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
         user_id: selectedAssignee,
         tipo: 'atribuicao_demanda',
         title: 'Nova responsabilidade atribuída',
-        message: `Você foi designado para a demanda ${demand?.codigo || ''}.`,
+        message: `Você foi designado para a demanda ${demand?.codigo || ''} na sprint ${parsedSprintNumber}${
+          hasFaseamento ? '' : '. Faseamento pendente - prazo de 1 dia.'
+        }`,
         relacionado_id: demandId,
       });
 
@@ -473,6 +550,8 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
         dadosNovos: {
           assigned_to: selectedAssignee,
           faseamento_completo: hasFaseamento,
+          sprint_number: parsedSprintNumber,
+          prazo_faseamento: prazoFaseamento,
         },
       });
 
@@ -496,6 +575,11 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
   const handleRequestUpdate = async () => {
     if (!demandId || !requestingAssignmentId) return;
 
+    if (!updateMessage.trim()) {
+      toast.error('Por favor, informe uma mensagem para a solicitação.');
+      return;
+    }
+
     const assignment = assignments.find((item) => item.id === requestingAssignmentId);
     if (!assignment || !assignment.assigned_to) {
       toast.error('Não foi possível identificar o responsável.');
@@ -505,7 +589,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
     setUpdateSaving(true);
 
     try {
-      const message = updateMessage.trim() || `Solicitamos atualização da demanda ${demand?.codigo || ''}.`;
+      const message = updateMessage.trim();
 
       await supabase.from('notifications').insert({
         user_id: assignment.assigned_to,
@@ -1518,17 +1602,27 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
           responses={responses}
         />
 
-        <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <Dialog 
+          open={assignDialogOpen} 
+          onOpenChange={(open) => {
+            setAssignDialogOpen(open);
+            if (!open) {
+              setSelectedAssignee('');
+              setSprintNumber('');
+            }
+          }}
+        >
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Atribuir responsável</DialogTitle>
               <DialogDescription>
-                Defina um novo responsável para acompanhar a demanda.
+                Defina um novo responsável para acompanhar a demanda. Todos os campos são obrigatórios.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="assignee">Responsável *</Label>
                 <Select value={selectedAssignee ?? undefined} onValueChange={setSelectedAssignee}>
                   <SelectTrigger id="assignee">
                     <SelectValue placeholder="Selecione o responsável" />
@@ -1549,13 +1643,27 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sprint_number">Número da sprint *</Label>
+                <Input
+                  id="sprint_number"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={sprintNumber}
+                  onChange={(event) => setSprintNumber(event.target.value)}
+                  placeholder="Ex: 1, 2, 3..."
+                  required
+                />
+              </div>
             </div>
 
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleAssignResponsible} disabled={assignSaving}>
+              <Button onClick={handleAssignResponsible} disabled={assignSaving || !selectedAssignee || !sprintNumber}>
                 {assignSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Atribuir
               </Button>
             </DialogFooter>
@@ -1581,13 +1689,14 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
             </DialogHeader>
 
             <div className="space-y-2">
-              <Label htmlFor="update-message">Mensagem</Label>
+              <Label htmlFor="update-message">Mensagem *</Label>
               <Textarea
                 id="update-message"
                 value={updateMessage}
                 onChange={(event) => setUpdateMessage(event.target.value)}
                 placeholder={`Descreva o que precisa ser atualizado na demanda ${demand?.codigo || ''}`}
                 rows={4}
+                required
               />
             </div>
 
@@ -1595,7 +1704,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
               <Button variant="outline" onClick={() => setUpdateDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleRequestUpdate} disabled={updateSaving}>
+              <Button onClick={handleRequestUpdate} disabled={updateSaving || !updateMessage.trim()}>
                 {updateSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enviar solicitação
               </Button>
             </DialogFooter>

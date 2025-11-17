@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const Aprovacoes = () => {
   const { toast } = useToast();
@@ -24,13 +30,10 @@ const Aprovacoes = () => {
   const [selectedDemand, setSelectedDemand] = useState<any>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [userLevel, setUserLevel] = useState<'gerente' | 'comite' | 'ti' | null>(null);
+  const [userApprovals, setUserApprovals] = useState<Record<string, any>>({});
+  const [scrumEmpresa, setScrumEmpresa] = useState<string | null>(null);
 
-  useEffect(() => {
-    checkUserLevel();
-    fetchPendingApprovals();
-  }, []);
-
-  const checkUserLevel = async () => {
+  const checkUserLevel = useCallback(async () => {
     if (!user) return;
 
     // Verifica se é membro do comitê
@@ -43,6 +46,7 @@ const Aprovacoes = () => {
 
     if (committee) {
       setUserLevel('comite');
+      setScrumEmpresa(null);
       return;
     }
 
@@ -56,15 +60,22 @@ const Aprovacoes = () => {
 
     if (scrum) {
       setUserLevel('ti');
+      setScrumEmpresa(scrum.empresa as string);
       return;
     }
 
     // Por padrão, o usuário pode aprovar como gerente
     setUserLevel('gerente');
-  };
+    setScrumEmpresa(null);
+  }, [user]);
 
-  const fetchPendingApprovals = async () => {
+  const fetchPendingApprovals = useCallback(async (
+    levelOverride?: 'gerente' | 'comite' | 'ti'
+  ) => {
     if (!user) return;
+
+    const levelToUse = levelOverride || userLevel;
+    if (!levelToUse) return;
 
     setLoading(true);
     try {
@@ -73,29 +84,21 @@ const Aprovacoes = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Filtra baseado no nível do usuário
-      const { data: committee } = await supabase
-        .from('committee_members')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .eq('ativo', true)
-        .maybeSingle();
-
-      const { data: scrum } = await supabase
-        .from('scrum_masters')
-        .select('empresa')
-        .eq('user_id', user.id)
-        .eq('ativo', true)
-        .maybeSingle();
-
-      if (committee) {
+      if (levelToUse === 'comite') {
         // Comitê vê demandas Aguardando_Comite
         query = query.eq('status', 'Aguardando_Comite');
-      } else if (scrum) {
+      } else if (levelToUse === 'ti') {
+        if (!scrumEmpresa) {
+          setDemands([]);
+          setUserApprovals({});
+          setLoading(false);
+          return;
+        }
+
         // Scrum Master vê demandas Aguardando_Validacao_TI da sua empresa
         query = query
           .eq('status', 'Aguardando_Validacao_TI')
-          .eq('empresa', scrum.empresa as any);
+          .eq('empresa', scrumEmpresa as any);
       } else {
         // Gerentes veem demandas no Backlog ou Aguardando_Gerente
         query = query.in('status', ['Backlog', 'Aguardando_Gerente']);
@@ -105,43 +108,37 @@ const Aprovacoes = () => {
 
       if (error) throw error;
 
-      // Filtra apenas demandas que o usuário ainda não aprovou neste nível
-      const filtered = [];
-      if (data) {
-        for (const demand of data) {
-          // Se a demanda está no Backlog, verifica se já tem alguma ação deste usuário
-          if (demand.status === 'Backlog') {
-            const { data: anyAction } = await supabase
-              .from('demand_approvals')
-              .select('*')
-              .eq('demand_id', demand.id)
-              .eq('approver_id', user.id)
-              .eq('approval_level', userLevel || 'gerente');
+      // Busca as aprovações do usuário para todas as demandas
+      const approvalMap: Record<string, any> = {};
+      const demandIds = (data || []).map((demand) => demand.id);
 
-            // Se já teve alguma ação (aprovação ou recusa), não mostra mais
-            if (!anyAction || anyAction.length === 0) {
-              filtered.push(demand);
-            }
-            continue;
-          }
+      if (demandIds.length > 0) {
+        // Verifica histórico de ações
+        const { data: historyData, error: historyError } = await supabase
+          .from('demand_history')
+          .select('demand_id, action, user_id')
+          .eq('user_id', user.id)
+          .in('demand_id', demandIds)
+          .in('action', [
+            'aprovar_gerente',
+            'recusar_gerente',
+            'aprovar_comite',
+            'recusar_comite',
+            'aprovar_ti',
+            'recusar_ti',
+          ] as any);
 
-          // Para outros status, verifica se já aprovou
-          const { data: approval } = await supabase
-            .from('demand_approvals')
-            .select('*')
-            .eq('demand_id', demand.id)
-            .eq('approver_id', user.id)
-            .eq('approval_level', userLevel || 'gerente')
-            .maybeSingle();
-
-          if (!approval) {
-            filtered.push(demand);
-          }
+        if (historyError) {
+          console.error('Erro ao buscar histórico:', historyError);
         }
+
+        historyData?.forEach((entry: any) => {
+          approvalMap[entry.demand_id] = entry;
+        });
       }
 
-      console.log('Demandas filtradas:', filtered.length, 'de', data?.length || 0);
-      setDemands(filtered);
+      setUserApprovals(approvalMap);
+      setDemands(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar aprovações:', error);
       toast({
@@ -152,14 +149,47 @@ const Aprovacoes = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast, user, userLevel, scrumEmpresa]);
+
+  useEffect(() => {
+    checkUserLevel();
+  }, [checkUserLevel]);
+
+  useEffect(() => {
+    if (!userLevel) return;
+    fetchPendingApprovals();
+  }, [userLevel, fetchPendingApprovals]);
 
   const [initialAction, setInitialAction] = useState<'aprovar' | 'recusar' | 'solicitar_insumos' | null>(null);
 
-  const handleOpenApproval = (demand: any, action: 'aprovar' | 'recusar' | 'solicitar_insumos') => {
+  const handleOpenApproval = (
+    demand: any,
+    action: 'aprovar' | 'recusar' | 'solicitar_insumos'
+  ) => {
+    // Verifica se usuário já aprovou/reprovou
+    if (userApprovals[demand.id]) {
+      return; // Não faz nada se já aprovou/reprovou
+    }
+
+    if (action === 'aprovar') {
+      // Para aprovação, pedir confirmação direta
+      const confirmed = window.confirm('Tem certeza que deseja aprovar esta demanda?');
+      if (!confirmed) return;
+    }
+    
     setSelectedDemand(demand);
     setInitialAction(action);
     setApprovalDialogOpen(true);
+  };
+
+  const getTooltipMessage = (demandId: string, status: string) => {
+    const approval = userApprovals[demandId];
+    if (!approval) return null;
+
+    if (status === 'Aguardando_Comite') {
+      return 'Você já aprovou esta demanda, aguarde o comitê';
+    }
+    return 'Você já aprovou esta demanda';
   };
 
   if (loading || permissions.loading) {
@@ -290,44 +320,103 @@ const Aprovacoes = () => {
                 </div>
 
                 <div className="flex justify-start pt-4 border-t border-border/50">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        className="text-white hover:text-white/80 hover:bg-white/10 font-bold text-base px-8 border-white/30 shadow-md hover:shadow-lg transition-all"
+                  <TooltipProvider>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          className="text-white hover:text-white/80 hover:bg-white/10 font-bold text-base px-8 border-white/30 shadow-md hover:shadow-lg transition-all"
+                        >
+                          Ação
+                          <ChevronDown className="w-5 h-5 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent 
+                        align="start" 
+                        className="w-48 bg-popover border-border z-50"
                       >
-                        Ação
-                        <ChevronDown className="w-5 h-5 ml-2" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent 
-                      align="start" 
-                      className="w-48 bg-popover border-border z-50"
-                    >
-                      <DropdownMenuItem
-                        className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 cursor-pointer"
-                        onClick={() => handleOpenApproval(demand, 'solicitar_insumos')}
-                      >
-                        <Clock className="w-4 h-4 mr-2" />
-                        Solicitar Insumos
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
-                        onClick={() => handleOpenApproval(demand, 'recusar')}
-                      >
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Recusar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-primary hover:text-primary/80 hover:bg-primary/10 cursor-pointer"
-                        onClick={() => handleOpenApproval(demand, 'aprovar')}
-                      >
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Aprovar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <DropdownMenuItem
+                          className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 cursor-pointer"
+                          onClick={() => handleOpenApproval(demand, 'solicitar_insumos')}
+                          disabled={!!userApprovals[demand.id]}
+                        >
+                          <Clock className="w-4 h-4 mr-2" />
+                          Solicitar Insumos
+                        </DropdownMenuItem>
+                        
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <DropdownMenuItem
+                                className={`${
+                                  userApprovals[demand.id]
+                                    ? 'text-red-400/50 hover:text-red-400/50 opacity-50 cursor-not-allowed pointer-events-none'
+                                    : 'text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer'
+                                }`}
+                                onClick={(e) => {
+                                  if (userApprovals[demand.id]) {
+                                    e.preventDefault();
+                                    return;
+                                  }
+                                  handleOpenApproval(demand, 'recusar');
+                                }}
+                                onSelect={(e) => {
+                                  if (userApprovals[demand.id]) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                disabled={!!userApprovals[demand.id]}
+                              >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Recusar
+                              </DropdownMenuItem>
+                            </div>
+                          </TooltipTrigger>
+                          {userApprovals[demand.id] && (
+                            <TooltipContent>
+                              <p>{getTooltipMessage(demand.id, demand.status)}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <DropdownMenuItem
+                                className={`${
+                                  userApprovals[demand.id]
+                                    ? 'text-accent/50 hover:text-accent/50 opacity-50 cursor-not-allowed pointer-events-none'
+                                    : 'text-accent hover:text-accent-foreground hover:bg-accent/20 cursor-pointer'
+                                }`}
+                                onClick={(e) => {
+                                  if (userApprovals[demand.id]) {
+                                    e.preventDefault();
+                                    return;
+                                  }
+                                  handleOpenApproval(demand, 'aprovar');
+                                }}
+                                onSelect={(e) => {
+                                  if (userApprovals[demand.id]) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                disabled={!!userApprovals[demand.id]}
+                              >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Aprovar
+                              </DropdownMenuItem>
+                            </div>
+                          </TooltipTrigger>
+                          {userApprovals[demand.id] && (
+                            <TooltipContent>
+                              <p>{getTooltipMessage(demand.id, demand.status)}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TooltipProvider>
                 </div>
               </CardContent>
             </Card>

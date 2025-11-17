@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PlusCircle, ShieldCheck, Users, XCircle } from 'lucide-react';
+import { PlusCircle, ShieldCheck, Users, XCircle, FileText, Download } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { SETORES } from '@/types/demand';
@@ -57,6 +57,7 @@ import {
   listFunctionalRequirements,
   rejectFunctionalRequirement,
 } from '@/services/functionalRequirements';
+import { exportToWord, exportToPDF } from '@/services/requirementExport';
 import { cn } from '@/lib/utils';
 
 type RequirementFormState = {
@@ -99,10 +100,43 @@ const RequirementCard = ({
   onReject: (requirement: FunctionalRequirementRecord) => void;
   disableActions: boolean;
 }) => {
+  const { toast } = useToast();
   const statusConfig = FUNCTIONAL_REQUIREMENT_STATUS_CONFIG[requirement.status];
   const isCurrentApprover =
     requirement.current_approver_id === userId && requirement.status === 'pendente';
   const approverSequence = requirement.approver_ids || [];
+
+  const handleExportWord = async () => {
+    try {
+      await exportToWord(requirement);
+      toast({
+        title: 'Exportado com sucesso',
+        description: 'O requisito funcional foi exportado para Word.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro ao exportar',
+        description: 'Não foi possível exportar o requisito para Word.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      await exportToPDF(requirement);
+      toast({
+        title: 'Exportado com sucesso',
+        description: 'O requisito funcional foi exportado para PDF.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro ao exportar',
+        description: 'Não foi possível exportar o requisito para PDF.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <Card className="border-border/60">
@@ -214,25 +248,45 @@ const RequirementCard = ({
           </div>
         </div>
       </CardContent>
-      {isCurrentApprover && (
-        <CardFooter className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => onApprove(requirement)}
-            disabled={disableActions}
-            className="inline-flex items-center gap-2"
-          >
-            <ShieldCheck className="h-4 w-4" /> Assinar digitalmente
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => onReject(requirement)}
-            disabled={disableActions}
-            className="inline-flex items-center gap-2"
-          >
-            <XCircle className="h-4 w-4" /> Registrar reprovação
-          </Button>
-        </CardFooter>
-      )}
+      <CardFooter className="flex flex-wrap gap-2 border-t border-border/50 pt-4">
+        {isCurrentApprover && (
+          <>
+            <Button
+              onClick={() => onApprove(requirement)}
+              disabled={disableActions}
+              className="inline-flex items-center gap-2"
+            >
+              <ShieldCheck className="h-4 w-4" /> Assinar digitalmente
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => onReject(requirement)}
+              disabled={disableActions}
+              className="inline-flex items-center gap-2"
+            >
+              <XCircle className="h-4 w-4" /> Registrar reprovação
+            </Button>
+          </>
+        )}
+        {requirement.status === 'assinado' && (
+          <>
+            <Button
+              variant="outline"
+              onClick={handleExportWord}
+              className="inline-flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" /> Exportar Word
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportPDF}
+              className="inline-flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" /> Exportar PDF
+            </Button>
+          </>
+        )}
+      </CardFooter>
     </Card>
   );
 };
@@ -256,7 +310,6 @@ const FunctionalRequirements = () => {
     requirement: FunctionalRequirementRecord | null;
     action: 'approve' | 'reject' | null;
   }>({ requirement: null, action: null });
-  const [signaturePhrase, setSignaturePhrase] = useState('');
   const [actionComment, setActionComment] = useState('');
 
   const [form, setForm] = useState<RequirementFormState>(() => createEmptyFormState());
@@ -309,7 +362,6 @@ const FunctionalRequirements = () => {
     });
     queryClient.invalidateQueries({ queryKey: ['functional-requirements', user?.id] });
     setActionDialog({ requirement: null, action: null });
-    setSignaturePhrase('');
     setActionComment('');
   };
 
@@ -374,7 +426,6 @@ const FunctionalRequirements = () => {
 
   const resetActionDialog = () => {
     setActionDialog({ requirement: null, action: null });
-    setSignaturePhrase('');
     setActionComment('');
   };
 
@@ -383,7 +434,6 @@ const FunctionalRequirements = () => {
     action: 'approve' | 'reject',
   ) => {
     setActionDialog({ requirement, action });
-    setSignaturePhrase('');
     setActionComment('');
   };
 
@@ -439,19 +489,15 @@ const FunctionalRequirements = () => {
       return;
     }
 
-    if (signaturePhrase.trim().length < 6) {
-      toast({
-        title: 'Frase de assinatura inválida',
-        description: 'Informe uma frase secreta com pelo menos 6 caracteres para validar a assinatura.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    // Gerar frase de assinatura automaticamente
+    const timestamp = new Date().getTime();
+    const randomStr = Math.random().toString(36).substring(2, 15);
+    const autoSignaturePhrase = `${user.id}-${timestamp}-${randomStr}`;
 
     const payload = {
       requirementId: actionDialog.requirement.id,
       signerId: user.id,
-      signaturePhrase,
+      signaturePhrase: autoSignaturePhrase,
       comment: actionComment.trim() ? actionComment.trim() : undefined,
     };
 
@@ -744,16 +790,11 @@ const FunctionalRequirements = () => {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="signaturePhrase">Frase de assinatura digital</Label>
-              <Input
-                id="signaturePhrase"
-                placeholder="Digite sua frase secreta para confirmar a decisão"
-                value={signaturePhrase}
-                onChange={(event) => setSignaturePhrase(event.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                A frase será criptografada e vinculada ao registro da assinatura digital.
+            <div className="rounded-md bg-muted/50 p-4">
+              <p className="text-sm text-muted-foreground">
+                {actionDialog.action === 'approve'
+                  ? 'Ao confirmar, um código de assinatura digital será gerado automaticamente com hash criptográfico vinculado ao seu perfil e timestamp.'
+                  : 'Ao confirmar, sua reprovação será registrada permanentemente no histórico do requisito.'}
               </p>
             </div>
 

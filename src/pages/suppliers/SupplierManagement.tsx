@@ -104,7 +104,7 @@ const SupplierManagement = () => {
   const filteredSuppliers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    let filtered = suppliers.filter((supplier) => {
+    const filtered = suppliers.filter((supplier) => {
       const matchesStatus =
         statusFilter === "all" || supplier.status === statusFilter;
 

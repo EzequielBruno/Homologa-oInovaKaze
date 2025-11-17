@@ -15,6 +15,7 @@ import EmpresaDemands from "./pages/empresa/EmpresaDemands";
 import KanbanView from "./pages/empresa/KanbanView";
 import SquadsView from "./pages/empresa/SquadsView";
 import Arquivadas from "./pages/empresa/Arquivadas";
+import GerenciarSprint from "./pages/empresa/GerenciarSprint";
 import PareceresPendentes from "./pages/technical/PareceresPendentes";
 import Estimativas from "./pages/technical/Estimativas";
 import Retrospectiva from "./pages/Retrospectiva";
@@ -72,6 +73,7 @@ const App = () => (
               <Route path="empresa/:empresa/gestao-riscos" element={<GestaoRiscos />} />
               <Route path="empresa/:empresa/linha-do-tempo" element={<LinhaDoTempo />} />
               <Route path="empresa/:empresa/sprint-atual" element={<SprintAtual />} />
+              <Route path="empresa/:empresa/gerenciar-sprint" element={<GerenciarSprint />} />
               <Route path="empresa/:empresa/arquivadas" element={<Arquivadas />} />
               
               {/* Análise Técnica */}

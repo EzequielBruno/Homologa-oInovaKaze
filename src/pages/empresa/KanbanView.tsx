@@ -16,6 +16,7 @@ import { PhaseGroupCard, PHASE_GROUPS } from '@/components/kanban/KanbanPhaseGro
 import { DemandDetailsDialog } from '@/components/demands/DemandDetailsDialog';
 import { AddCommentDialog } from '@/components/demands/AddCommentDialog';
 import DemandDialog from '@/components/demands/DemandDialog';
+import ScopeChangeDialog from '@/components/demands/ScopeChangeDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -88,25 +89,27 @@ const KanbanView = () => {
   const [insumoDialogOpen, setInsumoDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [riskDialogOpen, setRiskDialogOpen] = useState(false);
   const [demandDialogOpen, setDemandDialogOpen] = useState(false);
-  const [changeDialogOpen, setChangeDialogOpen] = useState(false);
+  const [scopeChangeDialogOpen, setScopeChangeDialogOpen] = useState(false);
   const [insumoDemand, setInsumoDemand] = useState<Demand | null>(null);
   const [rejectDemand, setRejectDemand] = useState<Demand | null>(null);
   const [cancelDemand, setCancelDemand] = useState<Demand | null>(null);
+  const [blockDemand, setBlockDemand] = useState<Demand | null>(null);
   const [commentDemand, setCommentDemand] = useState<Demand | null>(null);
   const [riskDemand, setRiskDemand] = useState<Demand | null>(null);
   const [demandToEdit, setDemandToEdit] = useState<Demand | null>(null);
-  const [changeDemand, setChangeDemand] = useState<Demand | null>(null);
-  const [changeDescricao, setChangeDescricao] = useState('');
-  const [changeSaving, setChangeSaving] = useState(false);
+  const [scopeChangeDemandId, setScopeChangeDemandId] = useState<string | null>(null);
   const [insumoDescricao, setInsumoDescricao] = useState('');
   const [motivoRecusa, setMotivoRecusa] = useState('');
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const [motivoBloqueio, setMotivoBloqueio] = useState('');
   const [insumoSaving, setInsumoSaving] = useState(false);
   const [rejectSaving, setRejectSaving] = useState(false);
   const [cancelSaving, setCancelSaving] = useState(false);
+  const [blockSaving, setBlockSaving] = useState(false);
   const [riskAssessment, setRiskAssessment] = useState<Tables<'risk_assessments'> | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [approvalDemand, setApprovalDemand] = useState<Demand | null>(null);
@@ -484,7 +487,6 @@ const KanbanView = () => {
     const novaObservacao = `${existingObservacoes ? `${existingObservacoes}\n\n` : ''}[${timestamp}] INSUMO SOLICITADO:\nDescrição: ${
       insumoDescricao.trim()
     }`;
-    const shouldMoveToStandBy = insumoDemand.status !== 'StandBy';
 
     setDemands((prev) =>
       prev.map((item) =>
@@ -492,20 +494,19 @@ const KanbanView = () => {
           ? {
               ...item,
               observacoes: novaObservacao,
-              status: shouldMoveToStandBy ? 'StandBy' : item.status,
+              status: 'Backlog',
+              aguardando_insumo: true,
             }
           : item
       )
     );
 
     try {
-      const updatePayload: TablesUpdate<'demands'> = {
+      const updatePayload: any = {
         observacoes: novaObservacao,
+        status: 'Backlog',
+        aguardando_insumo: true,
       };
-
-      if (shouldMoveToStandBy) {
-        updatePayload.status = 'StandBy';
-      }
 
       const { error } = await supabase
         .from('demands')
@@ -521,12 +522,12 @@ const KanbanView = () => {
         dadosAnteriores: {
           status: insumoDemand.status,
           observacoes: insumoDemand.observacoes,
-          data_limite_regulatorio: insumoDemand.data_limite_regulatorio,
+          aguardando_insumo: false,
         },
         dadosNovos: {
-          status: shouldMoveToStandBy ? 'StandBy' : insumoDemand.status,
+          status: 'Backlog',
           observacoes: novaObservacao,
-          data_limite_regulatorio: insumoDemand.data_limite_regulatorio,
+          aguardando_insumo: true,
         },
       });
 
@@ -539,7 +540,7 @@ const KanbanView = () => {
 
       toast({
         title: 'Solicitação registrada',
-        description: 'A demanda foi marcada como aguardando insumo.',
+        description: 'A demanda foi movida para Backlog e marcada como aguardando insumo.',
       });
 
       await loadDemands();
@@ -635,6 +636,112 @@ const KanbanView = () => {
       setDemands(previousDemands);
     } finally {
       setRejectSaving(false);
+    }
+  };
+
+  const handleOpenBloquearDialog = (demandId: string) => {
+    const demand = demands.find((d) => d.id === demandId);
+    if (!demand) return;
+
+    setBlockDemand(demand);
+    setMotivoBloqueio('');
+    setBlockDialogOpen(true);
+  };
+
+  const handleBloquearDialogOpenChange = (open: boolean) => {
+    setBlockDialogOpen(open);
+    if (!open) {
+      setBlockDemand(null);
+      setMotivoBloqueio('');
+    }
+  };
+
+  const handleConfirmBloquear = async () => {
+    if (!blockDemand) return;
+
+    if (!motivoBloqueio.trim()) {
+      toast({
+        title: 'Motivo obrigatório',
+        description: 'Informe o motivo do bloqueio.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const validation = validateStatusTransition(blockDemand, 'Bloqueado');
+
+    if (!validation.allowed) {
+      toast({
+        title: 'Bloqueio não permitido',
+        description: validation.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setBlockSaving(true);
+    const previousDemands = [...demands];
+    const timestamp = new Date().toLocaleString('pt-BR');
+    const existingObservacoes = blockDemand.observacoes ? `${blockDemand.observacoes}` : '';
+    const novaObservacao = `${existingObservacoes ? `${existingObservacoes}\n\n` : ''}[${timestamp}] BLOQUEIO:\n${motivoBloqueio.trim()}`;
+
+    setDemands((prev) =>
+      prev.map((item) =>
+        item.id === blockDemand.id
+          ? { ...item, status: 'Bloqueado', observacoes: novaObservacao }
+          : item
+      )
+    );
+
+    try {
+      const { error } = await supabase
+        .from('demands')
+        .update({
+          status: 'Bloqueado',
+          observacoes: novaObservacao,
+        })
+        .eq('id', blockDemand.id);
+
+      if (error) throw error;
+
+      await logAction({
+        demandId: blockDemand.id,
+        action: 'bloquear',
+        descricao: `Demanda bloqueada: ${motivoBloqueio.trim()}`,
+        dadosAnteriores: {
+          status: blockDemand.status,
+          observacoes: blockDemand.observacoes,
+        },
+        dadosNovos: {
+          status: 'Bloqueado',
+          observacoes: novaObservacao,
+        },
+      });
+
+      await createNotification(
+        blockDemand.solicitante_id,
+        'Demanda bloqueada',
+        `A demanda ${blockDemand.codigo} foi bloqueada. Motivo: ${motivoBloqueio.trim()}.`,
+        blockDemand.id
+      );
+
+      toast({
+        title: 'Demanda bloqueada',
+        description: validation.message || 'A demanda foi marcada como bloqueada.',
+      });
+
+      await loadDemands();
+      handleBloquearDialogOpenChange(false);
+    } catch (error) {
+      console.error('Error blocking demand:', error);
+      toast({
+        title: 'Erro ao bloquear demanda',
+        description: 'Não foi possível bloquear a demanda.',
+        variant: 'destructive',
+      });
+      setDemands(previousDemands);
+    } finally {
+      setBlockSaving(false);
     }
   };
 
@@ -911,10 +1018,9 @@ const KanbanView = () => {
       return;
     }
 
-    if (validation.requiresConfirmation) {
-      const confirmed = window.confirm(validation.confirmationMessage || 'Confirma a aprovação desta demanda?');
-      if (!confirmed) return;
-    }
+    // Sempre pedir confirmação simples
+    const confirmed = window.confirm('Tem certeza que deseja aprovar esta demanda?');
+    if (!confirmed) return;
 
     const previousDemands = [...demands];
     const previousStatus = demand.status;
@@ -966,17 +1072,6 @@ const KanbanView = () => {
         variant: 'destructive',
       });
     }
-  };
-
-  const handleIniciarAprovacao = (demandId: string) => {
-    const demand = demands.find((d) => d.id === demandId);
-    if (!demand) return;
-
-    // Abre o dialog de aprovação com nível gerente
-    setApprovalDemand(demand);
-    setApprovalInitialAction('aprovar');
-    setApprovalLevel('gerente');
-    setApprovalDialogOpen(true);
   };
 
   const applyFilters = (demandsList: Demand[]) => {
@@ -1120,56 +1215,14 @@ const KanbanView = () => {
   };
 
   const handleSolicitarChange = (demandId: string) => {
-    const demand = demands.find((d) => d.id === demandId);
-    if (!demand) return;
-    setChangeDemand(demand);
-    setChangeDescricao('');
-    setChangeDialogOpen(true);
+    setScopeChangeDemandId(demandId);
+    setScopeChangeDialogOpen(true);
   };
 
-  const handleChangeDialogOpenChange = (open: boolean) => {
-    setChangeDialogOpen(open);
+  const handleScopeChangeDialogOpenChange = (open: boolean) => {
+    setScopeChangeDialogOpen(open);
     if (!open) {
-      setChangeDemand(null);
-      setChangeDescricao('');
-    }
-  };
-
-  const handleConfirmChange = async () => {
-    if (!changeDemand || !changeDescricao.trim()) {
-      toast({
-        title: 'Erro',
-        description: 'Descreva a solicitação de change',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setChangeSaving(true);
-    try {
-      await logAction({
-        demandId: changeDemand.id,
-        action: 'solicitar_change',
-        descricao: `Solicitação de change: ${changeDescricao}`,
-        dadosNovos: { solicitacao_change: changeDescricao },
-      });
-
-      toast({
-        title: 'Change solicitada',
-        description: 'A solicitação foi registrada no histórico da demanda.',
-      });
-
-      handleChangeDialogOpenChange(false);
-      await loadDemands();
-    } catch (error) {
-      console.error('Error requesting change:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível registrar a solicitação.',
-        variant: 'destructive',
-      });
-    } finally {
-      setChangeSaving(false);
+      setScopeChangeDemandId(null);
     }
   };
 
@@ -1254,6 +1307,7 @@ const KanbanView = () => {
                           created_at={demand.created_at ?? new Date().toISOString()}
                           documentos_anexados={demand.documentos_anexados}
                           hasTIApproval={false}
+                          hasRiskAssessment={Boolean((demand as any).avaliacao_risco_realizada)}
                           hasFaseamento={Boolean(demand.has_faseamento)}
                           regulatorio={demand.regulatorio}
                           squad={demand.squad}
@@ -1266,11 +1320,11 @@ const KanbanView = () => {
                           onAprovar={handleApproveDemand}
                           onReprovar={handleOpenReprovarDialog}
                           onCancelar={handleOpenCancelarDialog}
+                          onBloquear={handleOpenBloquearDialog}
                           onEdit={handleEdit}
                           onSolicitarChange={handleSolicitarChange}
                           onAddComment={handleOpenCommentDialog}
                           onReverterFaseamento={handleReverterFaseamento}
-                          onIniciarAprovacao={handleIniciarAprovacao}
                         />
                       ))
                     )}
@@ -1311,6 +1365,13 @@ const KanbanView = () => {
         onOpenChange={handleDemandDialogOpenChange}
         demand={demandToEdit ?? undefined}
         onSuccess={loadDemands}
+      />
+
+      <ScopeChangeDialog
+        open={scopeChangeDialogOpen}
+        onOpenChange={handleScopeChangeDialogOpenChange}
+        onSuccess={loadDemands}
+        initialDemandId={scopeChangeDemandId ?? undefined}
       />
 
       {riskDemand && (
@@ -1395,6 +1456,44 @@ const KanbanView = () => {
         </Dialog>
       )}
 
+      {blockDemand && (
+        <Dialog open={blockDialogOpen} onOpenChange={handleBloquearDialogOpenChange}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle>Bloquear Demanda</DialogTitle>
+              <DialogDescription>
+                Confirme o bloqueio da demanda {blockDemand.codigo} e registre o motivo.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="motivo-bloqueio">Motivo do bloqueio</Label>
+                <Textarea
+                  id="motivo-bloqueio"
+                  placeholder="Descreva o motivo do bloqueio"
+                  value={motivoBloqueio}
+                  onChange={(event) => setMotivoBloqueio(event.target.value)}
+                  rows={4}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => handleBloquearDialogOpenChange(false)}>
+                Voltar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmBloquear}
+                disabled={blockSaving}
+              >
+                {blockSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirmar bloqueio
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {cancelDemand && (
         <Dialog open={cancelDialogOpen} onOpenChange={handleCancelarDialogOpenChange}>
           <DialogContent className="sm:max-w-[480px]">
@@ -1442,39 +1541,6 @@ const KanbanView = () => {
         />
       )}
 
-      {changeDemand && (
-        <Dialog open={changeDialogOpen} onOpenChange={handleChangeDialogOpenChange}>
-          <DialogContent className="sm:max-w-[480px]">
-            <DialogHeader>
-              <DialogTitle>Solicitar Change</DialogTitle>
-              <DialogDescription>
-                Descreva a solicitação de change para a demanda {changeDemand.codigo}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="change-descricao">Descrição da change</Label>
-                <Textarea
-                  id="change-descricao"
-                  placeholder="Descreva as alterações necessárias"
-                  value={changeDescricao}
-                  onChange={(event) => setChangeDescricao(event.target.value)}
-                  rows={4}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => handleChangeDialogOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleConfirmChange} disabled={changeSaving}>
-                {changeSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirmar solicitação
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 };

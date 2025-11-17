@@ -101,36 +101,49 @@ export function RiskAssessmentDialog({
         if (error) throw error;
       }
 
-      // Se risco alto, mover demanda para Aguardando_Comite e criar notificação
-      if (indiceRisco > 90) {
-        const { error: updateError } = await supabase
-          .from('demands')
-          .update({ status: 'Aguardando_Comite' })
-          .eq('id', demand.id);
+      // Determina encaminhamentos após a avaliação de risco
+      const prioridadeAlta = demand.prioridade === 'Alta' || demand.prioridade === 'Crítica';
+      const riscoAlto = indiceRisco > 90;
+      const shouldNotifyCommittee = riscoAlto || prioridadeAlta;
 
-        if (updateError) throw updateError;
+      const { error: updateError } = await supabase
+        .from('demands')
+        .update({
+          status: 'Backlog',
+          avaliacao_risco_realizada: true,
+        } as any)
+        .eq('id', demand.id);
 
-        // Criar notificação para o comitê
+      if (updateError) throw updateError;
+
+      if (shouldNotifyCommittee) {
+        // Criar notificação para o comitê quando o risco ou prioridade exigir atenção
         const { data: committee } = await supabase
           .from('committee_members')
           .select('user_id')
           .eq('ativo', true);
 
-        if (committee) {
+        if (committee?.length) {
+          const motivoComite = riscoAlto
+            ? `alto risco (${indiceRisco.toFixed(0)})`
+            : `prioridade ${demand.prioridade}`;
+
           const notifications = committee.map(member => ({
             user_id: member.user_id,
             tipo: 'risk_high',
-            title: 'Alto Risco Identificado',
-            message: `A demanda ${demand.codigo} foi identificada com alto risco (${indiceRisco.toFixed(0)}) e requer análise do comitê.`,
+            title: riscoAlto ? 'Alto Risco Identificado' : 'Demanda de Alta Prioridade',
+            message: `A demanda ${demand.codigo} requer análise do comitê devido a ${motivoComite}.`,
             relacionado_id: demand.id,
           }));
 
           await supabase.from('notifications').insert(notifications);
         }
 
-        toast.success('Risco alto identificado. Demanda encaminhada para aprovação do comitê.');
+        toast.success(
+          'Avaliação de risco concluída. A demanda permanece no backlog para planejamento e o comitê foi notificado.'
+        );
       } else {
-        toast.success('Avaliação de risco concluída com sucesso');
+        toast.success('Avaliação de risco concluída. A demanda permanece no backlog para planejamento.');
       }
 
       // Log da ação

@@ -61,6 +61,9 @@ export const ApprovalDialog = ({
     }
   };
 
+  const levelLabel = getLevelLabel();
+  const isApproveAction = action === 'aprovar';
+
   const createNotification = async (userId: string, title: string, message: string) => {
     await supabase.from('notifications').insert({
       user_id: userId,
@@ -239,10 +242,20 @@ export const ApprovalDialog = ({
       let notifyNext = false;
 
       if (level === 'gerente') {
-        // Gerente aprovou, vai para comitê direto
-        newStatus = 'Aguardando_Comite';
-        notifyNext = true;
-        await notifyCommittee();
+        const prioridade = demand?.prioridade as string | undefined;
+        const isAwaitingGPLevel =
+          demand?.status === 'Aguardando_Gerente' || demand?.status === 'Aguardando_GP';
+        const isMediumOrLow = prioridade === 'Média' || prioridade === 'Baixa';
+
+        if (isAwaitingGPLevel && isMediumOrLow) {
+          // Aprovação de demandas média/baixa encerra no nível GP
+          newStatus = 'Aprovado_GP';
+        } else {
+          // Gerente aprovou, vai para comitê direto
+          newStatus = 'Aguardando_Comite';
+          notifyNext = true;
+          await notifyCommittee();
+        }
       } else if (level === 'comite') {
         // Verifica se todos do comitê aprovaram
         const { data: members } = await supabase
@@ -353,33 +366,40 @@ export const ApprovalDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Aprovar/Recusar - {getLevelLabel()}</DialogTitle>
+          <DialogTitle>
+            {isApproveAction
+              ? `Confirmar aprovação - ${levelLabel}`
+              : `Aprovar/Recusar - ${levelLabel}`}
+          </DialogTitle>
           <DialogDescription>
             Demanda: {demand?.codigo} - {demand?.empresa}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div>
-            <label className="text-sm font-medium">
-              {action === 'recusar' && 'Motivo da recusa (obrigatório):'}
-              {action === 'solicitar_insumos' && 'Detalhes necessários (obrigatório):'}
-              {action === 'aprovar' && 'Comentário (opcional):'}
-            </label>
-            <Textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder={
-                action === 'recusar'
-                  ? 'Ex: Falta de viabilidade financeira, necessita revisão...'
-                  : action === 'solicitar_insumos'
-                  ? 'Ex: Precisamos de mais detalhes sobre os requisitos funcionais, estimativas de ROI...'
-                  : 'Adicione um comentário se desejar...'
-              }
-              rows={4}
-              className="mt-2"
-            />
-          </div>
+          {isApproveAction ? (
+            <p className="text-center text-lg font-semibold text-foreground">Tem certeza?</p>
+          ) : action ? (
+            <div>
+              <label className="text-sm font-medium">
+                {action === 'recusar' && 'Motivo da recusa (obrigatório):'}
+                {action === 'solicitar_insumos' && 'Detalhes necessários (obrigatório):'}
+              </label>
+              <Textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder={
+                  action === 'recusar'
+                    ? 'Ex: Falta de viabilidade financeira, necessita revisão...'
+                    : 'Ex: Precisamos de mais detalhes sobre os requisitos funcionais, estimativas de ROI...'
+                }
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Selecione uma ação para continuar.</p>
+          )}
         </div>
 
         <DialogFooter>
@@ -392,7 +412,7 @@ export const ApprovalDialog = ({
             }}
             disabled={loading}
           >
-            Cancelar
+            {isApproveAction ? 'Não' : 'Cancelar'}
           </Button>
           <Button
             onClick={handleConfirm}
@@ -400,10 +420,15 @@ export const ApprovalDialog = ({
               loading ||
               ((action === 'recusar' || action === 'solicitar_insumos') && !motivo.trim())
             }
-            variant={action === 'recusar' ? 'destructive' : 'default'}
-            className={action === 'aprovar' ? 'bg-accent hover:bg-accent/90' : ''}
+            variant={
+              action === 'recusar'
+                ? 'destructive'
+                : action === 'aprovar'
+                ? 'accent'
+                : 'default'
+            }
           >
-            {loading ? 'Processando...' : 'Confirmar'}
+            {loading ? 'Processando...' : isApproveAction ? 'Sim' : 'Confirmar'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -11,6 +11,7 @@ type ActionType =
   | 'aprovar'
   | 'reprovar'
   | 'mudar_status'
+  | 'bloquear'
   | 'adicionar_fase'
   | 'atualizar_fase'
   | 'solicitar_insumo'

@@ -69,13 +69,11 @@ type ActionKey =
   | 'requestChange'
   | 'start'
   | 'moveToBlocked'
-  | 'unblock'
-  | 'iniciarAprovacao';
+  | 'unblock';
 
 const STATUS_ACTIONS: Partial<Record<string, ActionKey[]>> = {
   Backlog: [
     'view',
-    'iniciarAprovacao',
     'parecerTi',
     'requestInput',
     'assessRisk',
@@ -254,6 +252,7 @@ interface KanbanCardProps {
   created_at: string;
   documentos_anexados?: string[] | null;
   hasTIApproval?: boolean;
+  hasRiskAssessment?: boolean;
   hasFaseamento?: boolean;
   aprovacao_tecnica_coordenador?: string | null;
   aprovacao_comite_percentual?: number | null;
@@ -268,11 +267,11 @@ interface KanbanCardProps {
   onAprovar: (demandId: string) => void;
   onReprovar: (demandId: string) => void;
   onCancelar: (demandId: string) => void;
+  onBloquear?: (demandId: string) => void;
   onEdit?: (demandId: string) => void;
   onSolicitarChange?: (demandId: string) => void;
   onAddComment?: (demandId: string) => void;
   onReverterFaseamento?: (demandId: string) => void;
-  onIniciarAprovacao?: (demandId: string) => void;
 }
 
 export const KanbanCard = ({
@@ -286,6 +285,7 @@ export const KanbanCard = ({
   created_at,
   documentos_anexados,
   hasTIApproval = false,
+  hasRiskAssessment = false,
   hasFaseamento = false,
   aprovacao_tecnica_coordenador,
   aprovacao_comite_percentual,
@@ -300,11 +300,11 @@ export const KanbanCard = ({
   onAprovar,
   onReprovar,
   onCancelar,
+  onBloquear,
   onEdit,
   onSolicitarChange,
   onAddComment,
   onReverterFaseamento,
-  onIniciarAprovacao,
 }: KanbanCardProps) => {
   const getPrioridadeCor = (prioridade: string) => {
     switch (prioridade) {
@@ -346,7 +346,7 @@ export const KanbanCard = ({
       return false;
     }
 
-    return isActionAvailable(mappedAction, status, true);
+    return isActionAvailable(mappedAction, status, hasTIApproval, hasRiskAssessment);
   };
 
   const statusSpecificActions = STATUS_ACTIONS[status];
@@ -401,13 +401,13 @@ export const KanbanCard = ({
         };
       case 'requestInput': {
         if (!onSolicitarInsumo) return null;
-        const enabled = isActionAvailable('solicitar_insumo', status, hasTIApproval);
+        const enabled = isActionAvailable('solicitar_insumo', status, hasTIApproval, hasRiskAssessment);
         return {
           key: 'requestInput',
           label: 'Solicitar Insumo',
           icon: PackagePlus,
           disabled: !enabled,
-          disabledReason: getActionDisabledReason('solicitar_insumo', status, hasTIApproval),
+          disabledReason: getActionDisabledReason('solicitar_insumo', status, hasTIApproval, hasRiskAssessment),
           onSelect: () => {
             if (enabled) {
               onSolicitarInsumo(id);
@@ -417,13 +417,13 @@ export const KanbanCard = ({
       }
       case 'assessRisk': {
         if (!onAvaliarRisco) return null;
-        const enabled = isActionAvailable('avaliar_risco', status, hasTIApproval);
+        const enabled = isActionAvailable('avaliar_risco', status, hasTIApproval, hasRiskAssessment);
         return {
           key: 'assessRisk',
           label: 'Avaliar Risco',
           icon: ShieldAlert,
           disabled: !enabled,
-          disabledReason: getActionDisabledReason('avaliar_risco', status, hasTIApproval),
+          disabledReason: getActionDisabledReason('avaliar_risco', status, hasTIApproval, hasRiskAssessment),
           onSelect: () => {
             if (enabled) {
               onAvaliarRisco(id);
@@ -432,13 +432,13 @@ export const KanbanCard = ({
         };
       }
       case 'parecerTi': {
-        const enabled = isActionAvailable('parecer_tecnico_ti', status, hasTIApproval);
+        const enabled = isActionAvailable('parecer_tecnico_ti', status, hasTIApproval, hasRiskAssessment);
         return {
           key: 'parecerTi',
           label: 'Solicitar Avaliação TI',
           icon: FileText,
           disabled: !enabled,
-          disabledReason: getActionDisabledReason('parecer_tecnico_ti', status, hasTIApproval),
+          disabledReason: getActionDisabledReason('parecer_tecnico_ti', status, hasTIApproval, hasRiskAssessment),
           onSelect: () => {
             if (enabled) {
               onParecerTecnicoTI(id);
@@ -492,7 +492,7 @@ export const KanbanCard = ({
           key: 'approve',
           label: 'Aprovar',
           icon: CheckCircle,
-          className: 'text-emerald-600 focus:text-emerald-600',
+          className: 'text-accent focus:text-accent',
           disabled: !enabled,
           disabledReason: getActionDisabledReason('aprovar', status, hasTIApproval),
           onSelect: () => {
@@ -519,15 +519,6 @@ export const KanbanCard = ({
           },
         };
       }
-      case 'iniciarAprovacao':
-        if (!onIniciarAprovacao || status !== 'Backlog') return null;
-        return {
-          key: 'iniciarAprovacao',
-          label: 'Iniciar Aprovação',
-          icon: Send,
-          className: 'text-emerald-600 focus:text-emerald-600',
-          onSelect: () => onIniciarAprovacao(id),
-        };
       case 'requestChange':
         if (!onSolicitarChange) return null;
         return {
@@ -538,8 +529,29 @@ export const KanbanCard = ({
         };
       case 'start':
         return getMoveAction('Em_Progresso', 'Iniciar', PlayCircle);
-      case 'moveToBlocked':
-        return getMoveAction('Bloqueado', 'Bloqueado', AlertCircle);
+      case 'moveToBlocked': {
+        if (!onBloquear) {
+          return getMoveAction('Bloqueado', 'Bloquear', AlertCircle);
+        }
+
+        const validation = validateStatusTransition(demand, 'Bloqueado');
+
+        return {
+          key: 'moveToBlocked',
+          label: 'Bloquear',
+          icon: AlertCircle,
+          disabled: !validation.allowed,
+          disabledReason: !validation.allowed
+            ? validation.message ?? 'Transição não permitida.'
+            : null,
+          onSelect: () => {
+            if (!validation.allowed) {
+              return;
+            }
+            onBloquear(id);
+          },
+        };
+      }
       case 'unblock':
         return getMoveAction('Em_Progresso', 'Desbloquear', Unlock);
       default:

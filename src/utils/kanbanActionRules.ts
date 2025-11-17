@@ -35,6 +35,7 @@ interface ActionRules {
     excludedStatuses?: KanbanStatus[];
     requiresJustification?: boolean;
     requiresTIApproval?: boolean;
+    requiresRiskAssessment?: boolean;
   };
 }
 
@@ -47,10 +48,10 @@ const ACTION_RULES: ActionRules = {
   },
   parecer_tecnico_ti: {
     allowedStatuses: ['StandBy', 'Backlog', 'Arquivado', 'Novas', 'Alteracao_Escopo'],
+    requiresRiskAssessment: true,
   },
   avaliar_risco: {
     allowedStatuses: ['StandBy', 'Backlog', 'Arquivado', 'Novas', 'Alteracao_Escopo'],
-    requiresTIApproval: true,
   },
   solicitar_insumo: {
     allowedStatuses: [
@@ -83,7 +84,8 @@ const ACTION_RULES: ActionRules = {
 export const isActionAvailable = (
   action: KanbanAction,
   status: string,
-  hasTIApproval: boolean = false
+  hasTIApproval: boolean = false,
+  hasRiskAssessment: boolean = false
 ): boolean => {
   const rule = ACTION_RULES[action];
   if (!rule) return false;
@@ -100,9 +102,9 @@ export const isActionAvailable = (
   // Verifica se o status está na lista de permitidos
   const isAllowed = rule.allowedStatuses.includes(status as KanbanStatus);
   
-  // Se requer aprovação TI e a ação é avaliar risco, só permite se já tiver aprovação TI
-  if (action === 'avaliar_risco' && rule.requiresTIApproval) {
-    return isAllowed && hasTIApproval;
+  // Se requer avaliação de risco e a ação é parecer técnico TI, só permite se já tiver avaliação de risco
+  if (action === 'parecer_tecnico_ti' && rule.requiresRiskAssessment) {
+    return isAllowed && hasRiskAssessment;
   }
 
   return isAllowed;
@@ -121,7 +123,8 @@ export const requiresJustification = (action: KanbanAction): boolean => {
  */
 export const getAvailableActions = (
   status: string,
-  hasTIApproval: boolean = false
+  hasTIApproval: boolean = false,
+  hasRiskAssessment: boolean = false
 ): KanbanAction[] => {
   const actions: KanbanAction[] = [
     'visualizar',
@@ -134,7 +137,7 @@ export const getAvailableActions = (
     'cancelar',
   ];
 
-  return actions.filter((action) => isActionAvailable(action, status, hasTIApproval));
+  return actions.filter((action) => isActionAvailable(action, status, hasTIApproval, hasRiskAssessment));
 };
 
 /**
@@ -143,13 +146,14 @@ export const getAvailableActions = (
 export const getActionDisabledReason = (
   action: KanbanAction,
   status: string,
-  hasTIApproval: boolean = false
+  hasTIApproval: boolean = false,
+  hasRiskAssessment: boolean = false
 ): string | null => {
   const rule = ACTION_RULES[action];
   if (!rule) return 'Ação não configurada';
 
   // Se está disponível, não há razão
-  if (isActionAvailable(action, status, hasTIApproval)) {
+  if (isActionAvailable(action, status, hasTIApproval, hasRiskAssessment)) {
     return null;
   }
 
@@ -167,9 +171,9 @@ export const getActionDisabledReason = (
     return `Disponível apenas em: ${statusList}`;
   }
 
-  // Verifica aprovação TI
-  if (action === 'avaliar_risco' && rule.requiresTIApproval && !hasTIApproval) {
-    return 'Requer parecer técnico da TI primeiro';
+  // Verifica avaliação de risco
+  if (action === 'parecer_tecnico_ti' && rule.requiresRiskAssessment && !hasRiskAssessment) {
+    return 'Requer avaliação de risco primeiro';
   }
 
   return 'Ação indisponível neste momento';

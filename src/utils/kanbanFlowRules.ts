@@ -42,7 +42,7 @@ interface TransitionValidation {
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   StandBy: ['Backlog', 'Aprovado_GP'],
   Backlog: ['Aprovado_GP', 'StandBy'],
-  Aguardando_Gerente: ['Aguardando_Comite', 'Backlog'],
+  Aguardando_Gerente: ['Aguardando_Comite', 'Backlog', 'Aprovado_GP'],
   Aprovado_GP: ['Backlog', 'StandBy', 'Em_Progresso', 'Aguardando_Comite', 'Aguardando_Validacao_TI'],
   Aguardando_Validacao_TI: ['Backlog', 'StandBy', 'Aprovado_GP'],
   Aguardando_Comite: ['Aprovado_GP', 'Revisao'],
@@ -127,6 +127,13 @@ const validateSpecificRules = (
     };
   }
 
+  if (fromStatus === 'Aguardando_Gerente' && toStatus === 'Aprovado_GP') {
+    return {
+      allowed: true,
+      message: 'Demanda foi classificada como aprovada pelo Gerente/GP.',
+    };
+  }
+
   if (fromStatus === 'Aprovado_GP' && toStatus === 'Aguardando_Validacao_TI') {
     return {
       allowed: true,
@@ -184,15 +191,6 @@ const validateSpecificRules = (
       };
     }
 
-    const criticidade = demand.prioridade as Criticidade;
-    if (criticidade === 'Baixa' || criticidade === 'Média') {
-      return {
-        allowed: true,
-        requiresConfirmation: true,
-        confirmationMessage: 'Esta demanda tem criticidade baixa/média e poderia ir direto para Em Progresso. Deseja mesmo enviar ao Comitê?',
-      };
-    }
-
     return {
       allowed: true,
       message: 'Demanda será encaminhada para aprovação do Comitê.',
@@ -212,6 +210,13 @@ const validateSpecificRules = (
     return {
       allowed: true,
       message: 'Demanda aprovada pelo Comitê e será encaminhada para Diretoria.',
+    };
+  }
+
+  if (fromStatus === 'Revisao' && toStatus === 'Aguardando_Comite') {
+    return {
+      allowed: true,
+      message: 'Demanda retornará para reavaliação do Comitê.',
     };
   }
 

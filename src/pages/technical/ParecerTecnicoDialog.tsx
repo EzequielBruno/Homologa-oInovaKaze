@@ -220,10 +220,7 @@ export const ParecerTecnicoDialog = ({
           >
             Recusar
           </Button>
-          <Button
-            className="bg-primary hover:bg-primary/90"
-            onClick={() => handleAction('aprovar')}
-          >
+          <Button variant="accent" onClick={() => handleAction('aprovar')}>
             Aprovar com Faseamento
           </Button>
         </DialogFooter>
