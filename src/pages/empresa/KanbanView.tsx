@@ -996,7 +996,16 @@ const KanbanView = () => {
       return;
     }
 
-    const nextStatus = APPROVAL_FLOW[demand.status as DemandStatus];
+    let nextStatus = APPROVAL_FLOW[demand.status as DemandStatus];
+
+    if (demand.status === 'Aguardando_Gerente') {
+      const prioridade = demand.prioridade as string | undefined;
+      const isMediumOrLow = prioridade === 'Média' || prioridade === 'Baixa';
+
+      if (isMediumOrLow) {
+        nextStatus = 'Aprovado' as DemandStatus;
+      }
+    }
 
     if (!nextStatus) {
       toast({
@@ -1185,7 +1194,8 @@ const KanbanView = () => {
       'eletro': 'Eletrozema',
       'zf': 'Zema Financeira',
     };
-    return labels[empresa] || empresa;
+    const empresaKey = empresa.toLowerCase();
+    return labels[empresaKey] || empresa;
   };
 
   const handleViewDemand = (demandId: string) => {

@@ -274,10 +274,25 @@ const Dashboard = () => {
             </p>
           </CardContent>
         </Card>
+
+        <Card className="shadow-glow hover:shadow-yellow transition-smooth border-primary/20 bg-gradient-accent">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-primary-foreground">ROI Médio</CardTitle>
+            <TrendingUp className="h-4 w-4 text-primary-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-primary-foreground">
+              {stats.roiMedio.toFixed(1)}%
+            </div>
+            <p className="text-xs text-primary-foreground/80 mt-1">
+              Retorno sobre investimento
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* KPIs de TI Adicionais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="shadow-glow hover:shadow-yellow transition-smooth border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Taxa de Aprovação</CardTitle>
@@ -341,21 +356,6 @@ const Dashboard = () => {
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Custo estimado
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-glow hover:shadow-yellow transition-smooth border-primary/20 bg-gradient-accent">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-primary-foreground">ROI Médio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-primary-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary-foreground">
-              {stats.roiMedio.toFixed(1)}%
-            </div>
-            <p className="text-xs text-primary-foreground/80 mt-1">
-              Retorno sobre investimento
             </p>
           </CardContent>
         </Card>
@@ -548,13 +548,13 @@ const Dashboard = () => {
       <Card className="shadow-glow">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" />
+            <Target className="w-5 h-5 text-primary" />
             Ações Rápidas - PMO
           </CardTitle>
           <CardDescription>Acesso rápido às funcionalidades principais</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link to="/solicitar-demanda">
+          <Link to="/criar-demanda">
             <div className="p-4 border border-primary/20 rounded-lg hover:bg-gradient-primary hover:text-primary-foreground transition-smooth cursor-pointer group">
               <h3 className="font-semibold mb-2">Nova Solicitação</h3>
               <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
@@ -580,6 +580,71 @@ const Dashboard = () => {
           </Link>
         </CardContent>
       </Card>
+
+      {/* Indicadores Adicionais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="shadow-glow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-primary" />
+              Resumo de Entregas
+            </CardTitle>
+            <CardDescription>Visão consolidada do status atual</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">Demandas Ativas</span>
+                <span className="text-lg font-bold text-primary">{stats.emProgresso + stats.aprovado}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">Aguardando Aprovação</span>
+                <span className="text-lg font-bold text-yellow-500">{stats.aguardandoComite}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">Taxa de Conclusão</span>
+                <span className="text-lg font-bold text-green-500">
+                  {stats.total > 0 ? Math.round((stats.concluidas / stats.total) * 100) : 0}%
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">Eficiência Geral</span>
+                <span className="text-lg font-bold text-primary">{stats.taxaAprovacao}%</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-glow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              Métricas de Performance
+            </CardTitle>
+            <CardDescription>Indicadores de velocidade e qualidade</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">Lead Time Médio</span>
+                <span className="text-lg font-bold text-primary">{stats.leadTimeMedio} dias</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">Throughput/Mês</span>
+                <span className="text-lg font-bold text-primary">{stats.throughputMensal}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">Total de Horas</span>
+                <span className="text-lg font-bold text-primary">{stats.totalHorasEstimadas.toFixed(0)}h</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                <span className="text-sm font-medium">ROI Médio</span>
+                <span className="text-lg font-bold text-green-500">{stats.roiMedio.toFixed(1)}%</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

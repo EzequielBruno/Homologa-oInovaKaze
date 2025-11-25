@@ -472,6 +472,8 @@ export type Database = {
       }
       demands: {
         Row: {
+          aguardando_insumo: boolean | null
+          avaliacao_risco_realizada: boolean | null
           checklist_entrega: string | null
           classificacao: string | null
           codigo: string
@@ -513,6 +515,8 @@ export type Database = {
           versao: number | null
         }
         Insert: {
+          aguardando_insumo?: boolean | null
+          avaliacao_risco_realizada?: boolean | null
           checklist_entrega?: string | null
           classificacao?: string | null
           codigo: string
@@ -554,6 +558,8 @@ export type Database = {
           versao?: number | null
         }
         Update: {
+          aguardando_insumo?: boolean | null
+          avaliacao_risco_realizada?: boolean | null
           checklist_entrega?: string | null
           classificacao?: string | null
           codigo?: string

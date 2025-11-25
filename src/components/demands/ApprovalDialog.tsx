@@ -248,8 +248,8 @@ export const ApprovalDialog = ({
         const isMediumOrLow = prioridade === 'Média' || prioridade === 'Baixa';
 
         if (isAwaitingGPLevel && isMediumOrLow) {
-          // Aprovação de demandas média/baixa encerra no nível GP
-          newStatus = 'Aprovado_GP';
+          // Demandas média/baixa aprovadas pelo gerente seguem direto para Aprovadas Diretoria
+          newStatus = 'Aprovado';
         } else {
           // Gerente aprovou, vai para comitê direto
           newStatus = 'Aguardando_Comite';

@@ -144,7 +144,14 @@ export const usePermissions = (): Permissions => {
 
         const groupIds = userGroups?.map(g => g.group_id) || [];
 
-        // 7. Buscar permissões de empresa por grupo
+        // 7. Buscar todas as empresas ativas (para admins/tech leads)
+        const { data: empresasAtivas } = await supabase
+          .from('empresas')
+          .select('codigo')
+          .eq('ativo', true)
+          .order('ordem', { ascending: true });
+
+        // 8. Buscar permissões de empresa por grupo
         const empresasMap: Permissions['empresas'] = {};
         
         if (groupIds.length > 0) {
@@ -175,8 +182,8 @@ export const usePermissions = (): Permissions => {
 
         // Admins e Tech Leads têm acesso total
         if (isAdmin || isTechLead) {
-          ['ZC', 'Eletro', 'ZF', 'ZS'].forEach(emp => {
-            empresasMap[emp] = {
+          (empresasAtivas || []).forEach(emp => {
+            empresasMap[emp.codigo] = {
               nivel: 'gerencial',
               canView: true,
               canEdit: true,
@@ -185,7 +192,7 @@ export const usePermissions = (): Permissions => {
           });
         }
 
-        // 8. Buscar permissões específicas por grupo
+        // 9. Buscar permissões específicas por grupo
         let hasRelatorios = false;
         let hasUsuarios = false;
         let hasConfiguracoes = false;

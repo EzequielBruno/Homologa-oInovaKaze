@@ -10,18 +10,29 @@ export interface Empresa {
   ordem: number;
 }
 
-export const useEmpresas = () => {
+interface UseEmpresasOptions {
+  onlyActive?: boolean;
+  enabled?: boolean;
+}
+
+export const useEmpresas = ({ onlyActive = true, enabled = true }: UseEmpresasOptions = {}) => {
   return useQuery({
-    queryKey: ['empresas'],
+    queryKey: ['empresas', { onlyActive }],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('empresas')
         .select('*')
-        .eq('ativo', true)
         .order('ordem', { ascending: true });
+
+      if (onlyActive) {
+        query = query.eq('ativo', true);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data as Empresa[];
     },
+    enabled,
   });
 };

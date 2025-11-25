@@ -42,7 +42,7 @@ interface TransitionValidation {
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   StandBy: ['Backlog', 'Aprovado_GP'],
   Backlog: ['Aprovado_GP', 'StandBy'],
-  Aguardando_Gerente: ['Aguardando_Comite', 'Backlog', 'Aprovado_GP'],
+  Aguardando_Gerente: ['Aguardando_Comite', 'Backlog', 'Aprovado_GP', 'Aprovado'],
   Aprovado_GP: ['Backlog', 'StandBy', 'Em_Progresso', 'Aguardando_Comite', 'Aguardando_Validacao_TI'],
   Aguardando_Validacao_TI: ['Backlog', 'StandBy', 'Aprovado_GP'],
   Aguardando_Comite: ['Aprovado_GP', 'Revisao'],
@@ -124,6 +124,23 @@ const validateSpecificRules = (
     return {
       allowed: true,
       message: 'Demanda aprovada pelo Gerente e será encaminhada para Comitê.',
+    };
+  }
+
+  if (fromStatus === 'Aguardando_Gerente' && toStatus === 'Aprovado') {
+    const prioridade = demand.prioridade as Criticidade;
+    const isMediumOrLow = prioridade === 'Média' || prioridade === 'Baixa';
+
+    if (!isMediumOrLow) {
+      return {
+        allowed: false,
+        message: 'Apenas demandas de prioridade Média ou Baixa podem ser aprovadas diretamente pelo gerente.',
+      };
+    }
+
+    return {
+      allowed: true,
+      message: 'Demanda aprovada pelo Gerente e movida para Aprovadas Diretoria.',
     };
   }
 

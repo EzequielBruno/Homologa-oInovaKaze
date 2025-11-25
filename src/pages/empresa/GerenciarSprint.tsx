@@ -140,13 +140,13 @@ const GerenciarSprint = () => {
           profiles:solicitante_id(full_name)
         `,
         )
-        .eq('empresa', empresaCode)
+        .eq('empresa', empresaCode as Database['public']['Enums']['empresa_type'])
         .not('status', 'eq', 'Arquivado')
         .order('created_at', { ascending: true });
 
       if (error) throw error;
 
-      setDemands((data as DemandRow[]) || []);
+      setDemands((data as any) || []);
     } catch (error: any) {
       console.error('Erro ao carregar demandas da sprint:', error);
       toast({
@@ -278,7 +278,7 @@ const GerenciarSprint = () => {
           if (moveToProgress && demand.status !== 'Em_Progresso') {
             updates.status = 'Em_Progresso';
             newStatus = 'Em_Progresso';
-            action = 'mudanca_status';
+            action = 'mudar_status';
           }
 
           const { error } = await supabase
@@ -294,7 +294,7 @@ const GerenciarSprint = () => {
               user_id: userId,
               action,
               descricao:
-                action === 'mudanca_status'
+                action === 'mudar_status'
                   ? `Demanda ${demand.codigo} movida para a sprint ${selectedSprint} e marcada como Em Progresso`
                   : `Demanda ${demand.codigo} movida para a sprint ${selectedSprint}`,
               dados_anteriores: {
@@ -362,7 +362,7 @@ const GerenciarSprint = () => {
           if (returnToBacklog && demand.status !== 'Backlog') {
             updates.status = 'Backlog';
             newStatus = 'Backlog';
-            action = 'mudanca_status';
+            action = 'mudar_status';
           }
 
           const { error } = await supabase
@@ -378,7 +378,7 @@ const GerenciarSprint = () => {
               user_id: userId,
               action,
               descricao:
-                action === 'mudanca_status'
+                action === 'mudar_status'
                   ? `Demanda ${demand.codigo} removida da sprint ${selectedSprint} e retornada ao Backlog`
                   : `Demanda ${demand.codigo} removida da sprint ${selectedSprint}`,
               dados_anteriores: {
@@ -432,7 +432,7 @@ const GerenciarSprint = () => {
         await supabase.from('demand_history').insert({
           demand_id: demand.id,
           user_id: userId,
-          action: 'mudanca_status',
+          action: 'mudar_status',
           descricao: `Status da demanda ${demand.codigo} atualizado para ${statusLabels[status]}`,
           dados_anteriores: {
             status: demand.status,
@@ -459,7 +459,7 @@ const GerenciarSprint = () => {
     }
   };
 
-  const formatStatus = (status: DemandStatus) => statusLabels[status] ?? status.replaceAll('_', ' ');
+  const formatStatus = (status: DemandStatus) => statusLabels[status] ?? status.replace(/_/g, ' ');
 
   const getStatusColor = (status: DemandStatus) => statusColors[status] ?? 'bg-muted text-foreground';
 

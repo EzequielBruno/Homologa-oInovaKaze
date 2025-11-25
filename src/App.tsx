@@ -36,6 +36,7 @@ import ImprimirDemanda from "./pages/ImprimirDemanda";
 import SupplierRegistration from "./pages/suppliers/SupplierRegistration";
 import SupplierManagement from "./pages/suppliers/SupplierManagement";
 import FunctionalRequirements from "./pages/FunctionalRequirements";
+import CompanyManagement from "./pages/companies/CompanyManagement";
 
 const queryClient = new QueryClient();
 
@@ -91,6 +92,7 @@ const App = () => (
               <Route path="permissoes" element={<Permissoes />} />
               <Route path="relatorios" element={<Relatorios />} />
               <Route path="formularios-personalizados" element={<FormulariosPersonalizados />} />
+              <Route path="empresas" element={<CompanyManagement />} />
               <Route path="fornecedores" element={<SupplierManagement />} />
 
               {/* Perfil */}

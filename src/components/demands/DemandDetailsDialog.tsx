@@ -107,7 +107,6 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
   const [assignSaving, setAssignSaving] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [selectedAssignee, setSelectedAssignee] = useState('');
-  const [sprintNumber, setSprintNumber] = useState('');
   const [updateMessage, setUpdateMessage] = useState('');
   const [requestingAssignmentId, setRequestingAssignmentId] = useState<string | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -133,7 +132,6 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
       loadAvailableUsers();
     } else {
       setSelectedAssignee('');
-      setSprintNumber('');
     }
   }, [assignDialogOpen]);
 
@@ -206,17 +204,15 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
         .order('created_at', { ascending: false });
 
       // Carregar atribuições
-      const { data: assignmentsData } = await supabase
+      const { data: assignmentsData, error: assignmentsError } = await supabase
         .from('demand_assignments')
-        .select(
-          `
-            *,
-            assigned_to_profile:assigned_to (id, full_name, avatar_url),
-            assigned_by_profile:assigned_by (id, full_name, avatar_url)
-          `
-        )
+        .select('*')
         .eq('demand_id', demandId)
         .order('created_at', { ascending: false });
+
+      if (assignmentsError) {
+        throw assignmentsError;
+      }
 
       let assignmentsWithProfiles = assignmentsData || [];
 
@@ -243,20 +239,22 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
           profileMap.set(profile.id, profile);
         });
 
-        assignmentsWithProfiles = assignmentsWithProfiles.map((assignment) => {
+        assignmentsWithProfiles = assignmentsWithProfiles.map((assignment: any) => {
+          const baseAssignedToProfile = assignment.assigned_to_profile || {};
           const assignedToProfile = assignment.assigned_to
             ? {
-                ...(assignment.assigned_to_profile || {}),
-                ...(profileMap.get(assignment.assigned_to) || {}),
+                ...baseAssignedToProfile,
+                ...(profileMap.get(assignment.assigned_to) ?? {}),
               }
-            : assignment.assigned_to_profile;
+            : assignment.assigned_to_profile ?? null;
 
+          const baseAssignedByProfile = assignment.assigned_by_profile || {};
           const assignedByProfile = assignment.assigned_by
             ? {
-                ...(assignment.assigned_by_profile || {}),
-                ...(profileMap.get(assignment.assigned_by) || {}),
+                ...baseAssignedByProfile,
+                ...(profileMap.get(assignment.assigned_by) ?? {}),
               }
-            : assignment.assigned_by_profile;
+            : assignment.assigned_by_profile ?? null;
 
           return {
             ...assignment,
@@ -472,6 +470,14 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
     }
   };
 
+  const currentSprintNumber = useMemo(() => {
+    if (typeof demand?.sprint_atual === 'number' && Number.isFinite(demand.sprint_atual)) {
+      return demand.sprint_atual;
+    }
+
+    return null;
+  }, [demand?.sprint_atual]);
+
   const getAssigneeName = (assigneeId: string) => {
     return (
       availableUsers.find((user) => user.id === assigneeId)?.full_name ||
@@ -488,15 +494,8 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
       return;
     }
 
-    if (!sprintNumber || sprintNumber.trim() === '') {
-      toast.error('Informe o número da sprint.');
-      return;
-    }
-
-    const parsedSprintNumber = Number(sprintNumber);
-
-    if (!Number.isFinite(parsedSprintNumber) || parsedSprintNumber <= 0 || isNaN(parsedSprintNumber)) {
-      toast.error('Informe um número de sprint válido (número positivo).');
+    if (!currentSprintNumber || currentSprintNumber <= 0) {
+      toast.error('A demanda não possui sprint definida.');
       return;
     }
 
@@ -527,17 +526,24 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
         assigned_by: userData.user.id,
         faseamento_completo: hasFaseamento,
         notificacao_pendente: !hasFaseamento,
-        sprint_number: parsedSprintNumber,
+        sprint_number: currentSprintNumber,
         prazo_faseamento: prazoFaseamento,
       }] as any);
 
       if (assignError) throw assignError;
 
+      const { error: updateDemandError } = await supabase
+        .from('demands')
+        .update({ responsavel_tecnico_id: selectedAssignee })
+        .eq('id', demandId);
+
+      if (updateDemandError) throw updateDemandError;
+
       await supabase.from('notifications').insert({
         user_id: selectedAssignee,
         tipo: 'atribuicao_demanda',
         title: 'Nova responsabilidade atribuída',
-        message: `Você foi designado para a demanda ${demand?.codigo || ''} na sprint ${parsedSprintNumber}${
+        message: `Você foi designado para a demanda ${demand?.codigo || ''} na sprint ${currentSprintNumber}${
           hasFaseamento ? '' : '. Faseamento pendente - prazo de 1 dia.'
         }`,
         relacionado_id: demandId,
@@ -550,7 +556,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
         dadosNovos: {
           assigned_to: selectedAssignee,
           faseamento_completo: hasFaseamento,
-          sprint_number: parsedSprintNumber,
+          sprint_number: currentSprintNumber,
           prazo_faseamento: prazoFaseamento,
         },
       });
@@ -819,9 +825,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
       }
     });
 
-    return Array.from(latestAssignments.values()).filter(
-      (assignment) => !assignment.faseamento_completo
-    );
+    return Array.from(latestAssignments.values());
   }, [assignments]);
 
   const parsedUserStory = useMemo(() => {
@@ -1521,7 +1525,7 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
                         </div>
                       ) : (
                         <p className="mt-2 text-sm text-muted-foreground">
-                          Nenhum responsável ativo no momento. Todos os faseamentos atribuídos foram concluídos.
+                          Nenhum responsável encontrado para esta demanda.
                         </p>
                       )}
                     </div>
@@ -1602,13 +1606,12 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
           responses={responses}
         />
 
-        <Dialog 
-          open={assignDialogOpen} 
+        <Dialog
+          open={assignDialogOpen}
           onOpenChange={(open) => {
             setAssignDialogOpen(open);
             if (!open) {
               setSelectedAssignee('');
-              setSprintNumber('');
             }
           }}
         >
@@ -1616,7 +1619,8 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
             <DialogHeader>
               <DialogTitle>Atribuir responsável</DialogTitle>
               <DialogDescription>
-                Defina um novo responsável para acompanhar a demanda. Todos os campos são obrigatórios.
+                Defina um novo responsável para acompanhar a demanda. A sprint atual da demanda será utilizada
+                automaticamente.
               </DialogDescription>
             </DialogHeader>
 
@@ -1645,17 +1649,20 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="sprint_number">Número da sprint *</Label>
+                <Label htmlFor="sprint_number">Sprint da demanda</Label>
                 <Input
                   id="sprint_number"
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={sprintNumber}
-                  onChange={(event) => setSprintNumber(event.target.value)}
-                  placeholder="Ex: 1, 2, 3..."
-                  required
+                  value={
+                    typeof currentSprintNumber === 'number'
+                      ? `Sprint ${currentSprintNumber}`
+                      : 'Sprint não definida'
+                  }
+                  readOnly
+                  disabled
                 />
+                <p className="text-xs text-muted-foreground">
+                  Atribuições utilizam automaticamente a sprint registrada no cartão.
+                </p>
               </div>
             </div>
 
@@ -1663,7 +1670,14 @@ export const DemandDetailsDialog = ({ demandId, open, onOpenChange }: DemandDeta
               <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleAssignResponsible} disabled={assignSaving || !selectedAssignee || !sprintNumber}>
+              <Button
+                onClick={handleAssignResponsible}
+                disabled={
+                  assignSaving ||
+                  !selectedAssignee ||
+                  !(typeof currentSprintNumber === 'number' && currentSprintNumber > 0)
+                }
+              >
                 {assignSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Atribuir
               </Button>
             </DialogFooter>

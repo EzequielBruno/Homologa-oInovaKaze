@@ -60,8 +60,8 @@ const Permissoes = () => {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Verifica se tem acesso master
-  const hasManageAccess = permissions.canApprove || false;
+  // Verifica se tem acesso master (apenas administradores/grupos com acesso total)
+  const hasManageAccess = permissions.hasManageAccess;
   
   // Add Committee Member Dialog
   const [addCommitteeOpen, setAddCommitteeOpen] = useState(false);
@@ -302,8 +302,23 @@ const Permissoes = () => {
     }
   };
 
-  if (loading) {
+  if (loading || permissions.loading) {
     return <div className="text-center p-8">Carregando...</div>;
+  }
+
+  if (!hasManageAccess) {
+    return (
+      <div className="space-y-6 text-center p-8">
+        <Shield className="w-12 h-12 mx-auto text-muted-foreground" />
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Acesso restrito</h1>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Você não possui permissão para gerenciar grupos de acesso, permissões ou usuários.
+            Entre em contato com um administrador para solicitar acesso.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const handleTabChange = (value: string) => {

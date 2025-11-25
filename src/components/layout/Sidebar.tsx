@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { ChevronDown, ChevronRight, LayoutDashboard, FileText, Users, Settings, ClipboardList, Building2, Layers, Clock, CheckCircle, AlertCircle, FileCheck, GitBranch, BarChart3, Calendar, ClipboardCheck, History, MessageSquare, Shield, UserCircle, FileSignature } from 'lucide-react';
 import { useState } from 'react';
 import { useEmpresas } from '@/hooks/useEmpresas';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -9,7 +10,8 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
-  const { data: empresas, isLoading } = useEmpresas();
+  const { isAdmin, loading: permissionsLoading } = usePermissions();
+  const { data: empresas, isLoading } = useEmpresas({ enabled: isAdmin });
   const [empresasOpen, setEmpresasOpen] = useState<Record<string, boolean>>({});
   const [tecnicoOpen, setTecnicoOpen] = useState(false);
   const [cerimoniaOpen, setCerimoniaOpen] = useState(false);
@@ -78,7 +80,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
     >
       <div className="p-4 border-b border-border flex items-center justify-between">
         {!collapsed && (
-          <h1 className="text-xl font-bold text-primary">Zema Tech</h1>
+          <h1 className="text-xl font-bold text-primary">Inova Kaze</h1>
         )}
         <button
           onClick={onToggle}
@@ -94,6 +96,12 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
           Dashboard
         </NavItem>
 
+        {isAdmin && (
+          <NavItem to="/empresas" icon={Building2}>
+            Gerenciar Empresas
+          </NavItem>
+        )}
+
         <NavItem to="/fornecedores" icon={Settings}>
           Gerenciar Fornecedores
         </NavItem>
@@ -102,75 +110,79 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
           Demandas
         </NavItem>
 
-        {!collapsed && <div className="pt-4 pb-2 text-xs font-semibold text-muted-foreground uppercase">Empresas</div>}
+        {isAdmin && (
+          <>
+            {!collapsed && <div className="pt-4 pb-2 text-xs font-semibold text-muted-foreground uppercase">Empresas</div>}
 
-        {isLoading ? (
-          <div className="px-4 py-2 text-sm text-muted-foreground">Carregando empresas...</div>
-        ) : (
-          empresas?.map((empresa) => (
-            <SubMenu 
-              key={empresa.id}
-              title={empresa.nome_exibicao} 
-              icon={Building2} 
-              isOpen={empresasOpen[empresa.codigo] || false} 
-              onToggle={() => toggleEmpresa(empresa.codigo)}
-            >
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/kanban`} 
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                📊 Kanban
-              </NavLink>
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/squads`} 
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                👥 Squads
-              </NavLink>
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/gestao-riscos`} 
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                🛡️ Gestão de Riscos
-              </NavLink>
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/linha-do-tempo`} 
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                📅 Linha do Tempo
-              </NavLink>
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/backlog`} 
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                Backlog
-              </NavLink>
-              <NavLink
-                to={`/empresa/${empresa.codigo.toLowerCase()}/sprint-atual`}
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                Sprint Atual
-              </NavLink>
-              <NavLink
-                to={`/empresa/${empresa.codigo.toLowerCase()}/gerenciar-sprint`}
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                Gerenciar Sprint
-              </NavLink>
-              <NavLink
-                to={`/empresa/${empresa.codigo.toLowerCase()}/concluidas`}
-                className="block py-2 text-sm hover:text-primary transition-colors"
-              >
-                Concluídas
-              </NavLink>
-              <NavLink 
-                to={`/empresa/${empresa.codigo.toLowerCase()}/arquivadas`} 
-                className="block py-2 text-sm hover:text-primary transition-colors text-muted-foreground"
-              >
-                📦 Arquivadas
-              </NavLink>
-            </SubMenu>
-          ))
+            {permissionsLoading || isLoading ? (
+              <div className="px-4 py-2 text-sm text-muted-foreground">Carregando empresas...</div>
+            ) : (
+              empresas?.map((empresa) => (
+                <SubMenu
+                  key={empresa.id}
+                  title={empresa.nome_exibicao}
+                  icon={Building2}
+                  isOpen={empresasOpen[empresa.codigo] || false}
+                  onToggle={() => toggleEmpresa(empresa.codigo)}
+                >
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/kanban`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    📊 Kanban
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/squads`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    👥 Squads
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/gestao-riscos`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    🛡️ Gestão de Riscos
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/linha-do-tempo`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    📅 Linha do Tempo
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/backlog`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    Backlog
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/sprint-atual`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    Sprint Atual
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/gerenciar-sprint`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    Gerenciar Sprint
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/concluidas`}
+                    className="block py-2 text-sm hover:text-primary transition-colors"
+                  >
+                    Concluídas
+                  </NavLink>
+                  <NavLink
+                    to={`/empresa/${empresa.codigo.toLowerCase()}/arquivadas`}
+                    className="block py-2 text-sm hover:text-primary transition-colors text-muted-foreground"
+                  >
+                    📦 Arquivadas
+                  </NavLink>
+                </SubMenu>
+              ))
+            )}
+          </>
         )}
 
         {!collapsed && <div className="pt-4 pb-2 text-xs font-semibold text-muted-foreground uppercase">Gestão</div>}

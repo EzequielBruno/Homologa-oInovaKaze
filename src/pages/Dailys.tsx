@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { SQUADS } from '@/types/demand';
 import { useDemandHistory } from '@/hooks/useDemandHistory';
+import { useEmpresas } from '@/hooks/useEmpresas';
 import {
   Dialog,
   DialogContent,
@@ -62,36 +63,41 @@ const Dailys = () => {
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('all');
   const [selectedSquad, setSelectedSquad] = useState<string>('all');
   const [availableSquads, setAvailableSquads] = useState<string[]>([]);
-  
-  const empresas = ['ZS', 'ZC', 'Eletro', 'ZF'];
+
+  const { data: empresas, isLoading: empresasLoading } = useEmpresas();
 
   useEffect(() => {
     loadSquads();
-  }, [selectedEmpresa]);
+  }, [selectedEmpresa, empresas]);
 
   useEffect(() => {
     loadData();
   }, [selectedEmpresa, selectedSquad]);
 
   const loadSquads = async () => {
+    if (!empresas || empresas.length === 0) {
+      setAvailableSquads(['Avaliar']);
+      return;
+    }
+
     if (selectedEmpresa === 'all') {
       // Carregar todas as squads de todas as empresas
       try {
         const allSquads = new Set<string>();
-        
+
         for (const emp of empresas) {
-          const defaultSquads = SQUADS[emp] || [];
-          
+          const defaultSquads = SQUADS[emp.codigo] || [];
+
           const { data: customSquads } = await supabase
             .from('squads')
             .select('nome')
-            .eq('empresa', emp)
+            .eq('empresa', emp.codigo)
             .eq('ativo', true);
 
           const { data: inactiveSquads } = await supabase
             .from('squads')
             .select('nome')
-            .eq('empresa', emp)
+            .eq('empresa', emp.codigo)
             .eq('ativo', false);
 
           const inactiveSet = new Set(inactiveSquads?.map(s => s.nome) || []);
@@ -259,6 +265,9 @@ const Dailys = () => {
   // Apenas membros do comitê, tech leads e admins podem adicionar updates
   const canAddUpdate = permissions.canApprove;
 
+  const getEmpresaNome = (codigo: string) =>
+    empresas?.find((empresa) => empresa.codigo === codigo)?.nome_exibicao || codigo;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -337,14 +346,16 @@ const Dailys = () => {
             </CardTitle>
             
             <div className="flex gap-2">
-              <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa}>
-                <SelectTrigger className="w-[140px]">
+              <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa} disabled={empresasLoading}>
+                <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Empresa" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas Empresas</SelectItem>
-                  {empresas.map(emp => (
-                    <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                  {empresas?.map((empresa) => (
+                    <SelectItem key={empresa.id} value={empresa.codigo}>
+                      {empresa.nome_exibicao}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -382,7 +393,7 @@ const Dailys = () => {
                               {update.demands.codigo}
                             </Badge>
                             <Badge variant="outline">
-                              {update.demands.empresa}
+                              {getEmpresaNome(update.demands.empresa)}
                             </Badge>
                             {update.demands.squad && (
                               <Badge variant="outline" className="text-xs">
